@@ -4,15 +4,13 @@ import com.spotify.docker.client.DockerClient.ListContainersParam
 import com.spotify.docker.client.messages.Container
 import com.spotify.docker.client.messages.ContainerInfo
 import com.spotify.docker.client.messages.HostConfig
-import java.time.Instant
-import java.util.Date
-import java.util.UUID
 import org.codefreak.codefreak.config.AppConfiguration
 import org.codefreak.codefreak.entity.Answer
 import org.codefreak.codefreak.entity.Task
 import org.codefreak.codefreak.repository.AnswerRepository
 import org.codefreak.codefreak.repository.TaskRepository
 import org.codefreak.codefreak.service.file.FileService
+import org.codefreak.codefreak.util.DockerUtil
 import org.codefreak.codefreak.util.NetUtil
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
@@ -20,6 +18,9 @@ import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.util.StreamUtils
+import java.time.Instant
+import java.util.Date
+import java.util.UUID
 
 @Service
 class IdeService : BaseService() {
@@ -28,6 +29,7 @@ class IdeService : BaseService() {
     const val LABEL_READ_ONLY_ANSWER_ID = ContainerService.LABEL_PREFIX + "answer-id-read-only"
     const val LABEL_ANSWER_ID = ContainerService.LABEL_PREFIX + "answer-id"
     const val LABEL_TASK_ID = ContainerService.LABEL_PREFIX + "task-id"
+
     // directory inside the IDE container with project files
     const val PROJECT_PATH = "/home/coder/project"
   }
@@ -64,8 +66,21 @@ class IdeService : BaseService() {
     return startIdeContainer(
         answer.id,
         if (readOnly) LABEL_READ_ONLY_ANSWER_ID else LABEL_ANSWER_ID, answer.id,
-        answer.task.ideImage
-    )
+        answer.task.ideImage) {
+      containerConfig {
+        answer.task.ideArguments?.let { args ->
+          cmd(*DockerUtil.splitCommand(args))
+        }
+      }
+      hostConfig {
+        appendBinds(
+            HostConfig.Bind.builder()
+                .from("/var/run/docker.sock")
+                .to("/var/run/docker.sock")
+                .build()
+        )
+      }
+    }
   }
 
   @Throws(ResourceLimitException::class)
@@ -75,7 +90,7 @@ class IdeService : BaseService() {
 
   @Synchronized
   @Throws(ResourceLimitException::class)
-  fun startIdeContainer(id: UUID, label: String, fileCollectionId: UUID, customImage: String? = null): String {
+  fun startIdeContainer(id: UUID, label: String, fileCollectionId: UUID, customImage: String? = null, customize: ContainerBuilder.() -> Unit = {}): String {
     // either take existing container or create a new one
     val container = containerService.getContainerWithLabel(label, id.toString())
     if (container != null && containerService.isContainerRunning(container.id())) {
@@ -90,7 +105,7 @@ class IdeService : BaseService() {
     return containerService.withCollectionFileLock(id) {
       if (container == null) {
         log.info("Creating new IDE container with $label=$id")
-        val containerId = this.createIdeContainer(label, id, customImage)
+        val containerId = this.createIdeContainer(label, id, customImage, customize)
         containerService.startContainer(containerId)
         // prepare the environment after the container has started
         this.copyFilesToIde(containerId, fileCollectionId)
@@ -167,7 +182,7 @@ class IdeService : BaseService() {
    * Configure and create a new IDE container.
    * Returns the ID of the created container
    */
-  protected fun createIdeContainer(label: String, id: UUID, customImage: String? = null): String {
+  protected fun createIdeContainer(label: String, id: UUID, customImage: String? = null, customize: ContainerBuilder.() -> Unit = {}): String {
     val image = customImage ?: config.ide.image
     val containerId = containerService.createContainer(image) {
       labels = mapOf(
@@ -181,6 +196,7 @@ class IdeService : BaseService() {
         memorySwap(config.ide.memory) // memory+swap = memory ==> 0 swap
         nanoCpus(config.ide.cpus * 1000000000L)
       }
+      customize()
     }
 
     // attach to network
@@ -227,7 +243,7 @@ class IdeService : BaseService() {
   }
 
   protected fun getAllIdeContainers(
-    vararg listParams: ListContainersParam
+      vararg listParams: ListContainersParam
   ) = mutableListOf<Container>().apply {
     addAll(containerService.listContainers(ListContainersParam.withLabel(LABEL_ANSWER_ID), *listParams))
     addAll(containerService.listContainers(ListContainersParam.withLabel(LABEL_READ_ONLY_ANSWER_ID), *listParams))

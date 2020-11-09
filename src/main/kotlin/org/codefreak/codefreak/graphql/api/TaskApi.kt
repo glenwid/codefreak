@@ -5,8 +5,6 @@ import com.expediagroup.graphql.annotations.GraphQLIgnore
 import com.expediagroup.graphql.annotations.GraphQLName
 import com.expediagroup.graphql.spring.operations.Mutation
 import com.expediagroup.graphql.spring.operations.Query
-import java.io.ByteArrayOutputStream
-import java.util.UUID
 import org.apache.catalina.core.ApplicationPart
 import org.codefreak.codefreak.auth.Authority
 import org.codefreak.codefreak.auth.Authorization
@@ -26,6 +24,8 @@ import org.springframework.core.io.ClassPathResource
 import org.springframework.security.access.annotation.Secured
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
+import java.io.ByteArrayOutputStream
+import java.util.UUID
 
 @GraphQLName("Task")
 class TaskDto(@GraphQLIgnore val entity: Task, ctx: ResolverContext) : BaseDto(ctx) {
@@ -46,6 +46,10 @@ class TaskDto(@GraphQLIgnore val entity: Task, ctx: ResolverContext) : BaseDto(c
   val ideImage by lazy {
     authorization.requireAuthorityIfNotCurrentUser(entity.owner, Authority.ROLE_ADMIN)
     entity.ideImage
+  }
+  val ideArguments by lazy {
+    authorization.requireAuthorityIfNotCurrentUser(entity.owner, Authority.ROLE_ADMIN)
+    entity.ideArguments
   }
   val hiddenFiles by lazy {
     authorization.requireAuthorityIfNotCurrentUser(entity.owner, Authority.ROLE_ADMIN)
@@ -86,8 +90,13 @@ class TaskInput(var id: UUID, var title: String, var timeLimit: Long?) {
   constructor() : this(UUID.randomUUID(), "", null)
 }
 
-class TaskDetailsInput(var id: UUID, var body: String?, var hiddenFiles: Array<String>, var protectedFiles: Array<String>, var ideEnabled: Boolean, var ideImage: String?) {
-  constructor() : this(UUID.randomUUID(), null, arrayOf(), arrayOf(), true, null)
+class TaskDetailsInput(var id: UUID = UUID.randomUUID()) {
+  var body: String? = null
+  var hiddenFiles: Array<String> = arrayOf()
+  var protectedFiles: Array<String> = arrayOf()
+  var ideEnabled: Boolean = true
+  var ideImage: String? = null
+  var ideArguments: String? = null
 }
 
 @Component
@@ -172,6 +181,7 @@ class TaskMutation : BaseResolver(), Mutation {
     task.body = input.body
     task.ideEnabled = input.ideEnabled
     task.ideImage = input.ideImage
+    task.ideArguments = input.ideArguments?.takeIf { it.isNotBlank() }
     task.hiddenFiles = input.hiddenFiles.map { it.trim() }.filter { it.isNotEmpty() }
     task.protectedFiles = input.protectedFiles.map { it.trim() }.filter { it.isNotEmpty() }
     serviceAccess.getService(TaskService::class).saveTask(task)

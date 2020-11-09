@@ -1,0 +1,20 @@
+databaseChangeLog:
+- changeSet:
+    id: 1604658749623-2
+    author: hkasch (generated)
+    changes:
+    - addColumn:
+        columns:
+        - column:
+            name: ide_arguments
+            type: varchar(255)
+        tableName: task
+- changeSet:
+    id: 1604658749623-1
+    author: hkasch (generated)
+    changes:
+    - dropDefaultValue:
+        columnDataType: boolean
+        columnName: ide_enabled
+        tableName: task
+

@@ -13,10 +13,10 @@ import com.spotify.docker.client.messages.ContainerInfo
 import java.io.InputStream
 import java.util.UUID
 import java.util.concurrent.locks.ReentrantLock
-import java.util.regex.Pattern
 import javax.ws.rs.ProcessingException
 import org.codefreak.codefreak.config.AppConfiguration
 import org.codefreak.codefreak.entity.Answer
+import org.codefreak.codefreak.util.DockerUtil
 import org.codefreak.codefreak.util.withTrailingSlash
 import org.glassfish.jersey.internal.LocalizationMessages
 import org.slf4j.LoggerFactory
@@ -47,16 +47,6 @@ class ContainerService : BaseService() {
    * @see withCollectionFileLock
    */
   private val answerFileLockMap = MapMaker().weakValues().makeMap<UUID, ReentrantLock>()
-
-  /**
-   * Inherit behaviour of the standard Docker CLI and fallback to :latest if no tag is given
-   */
-  fun normalizeImageName(imageName: String) =
-      if (imageName.contains(':')) {
-        imageName
-      } else {
-        "$imageName:latest"
-      }
 
   fun pullDockerImage(image: String) {
     val imageInfo = try {
@@ -152,7 +142,7 @@ class ContainerService : BaseService() {
     image: String,
     configure: ContainerBuilder.() -> Unit = {}
   ): String {
-    val normalizedImageName = normalizeImageName(image)
+    val normalizedImageName = DockerUtil.normalizeImageName(image)
     pullDockerImage(normalizedImageName)
 
     val builder = ContainerBuilder()
@@ -212,7 +202,7 @@ class ContainerService : BaseService() {
         if (stopOnFail && outputs.size > 0 && outputs.last().exitCode != 0L) {
           outputs.add(ExecResult("", -1))
         } else {
-          outputs.add(exec(containerId, splitCommand(it)))
+          outputs.add(exec(containerId, DockerUtil.splitCommand(it)))
         }
       }
       if (processFiles !== null) {
@@ -233,24 +223,6 @@ class ContainerService : BaseService() {
     } finally {
       docker.removeContainer(containerId, forceKill(), removeVolumes())
     }
-  }
-
-  private fun splitCommand(command: String): Array<String> {
-    // from https://stackoverflow.com/a/366532/5519485
-    val matchList = ArrayList<String>()
-    val regex = Pattern.compile("[^\\s\"']+|\"([^\"]*)\"|'([^']*)'")
-    val regexMatcher = regex.matcher(command)
-    while (regexMatcher.find()) {
-      when {
-        regexMatcher.group(1) != null -> // Add double-quoted string without the quotes
-          matchList.add(regexMatcher.group(1))
-        regexMatcher.group(2) != null -> // Add single-quoted string without the quotes
-          matchList.add(regexMatcher.group(2))
-        else -> // Add unquoted word
-          matchList.add(regexMatcher.group())
-      }
-    }
-    return matchList.toArray(arrayOf())
   }
 
   /**
