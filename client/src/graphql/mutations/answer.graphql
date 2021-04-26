@@ -20,3 +20,7 @@ mutation DeleteAnswer($id: ID!) {
 mutation ResetAnswer($id: ID!) {
   resetAnswer(id: $id)
 }
+
+mutation AddAnswerFeedback($answerId: ID!, $path: String!, $summary: String!, $lineStart: Int!) {
+  addAnswerFeedback(answerId: $answerId, path: $path, summary: $summary, lineStart: $lineStart)
+}

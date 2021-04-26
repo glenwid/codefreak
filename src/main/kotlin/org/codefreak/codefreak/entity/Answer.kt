@@ -22,7 +22,13 @@ class Answer(
    * The task this submission refers to
    */
   @ManyToOne
-  var task: Task
+  var task: Task,
+
+  /**
+   * Feedback for this answer
+   */
+  @OneToMany
+  var feedback: MutableSet<Feedback> = mutableSetOf()
 
 ) : BaseEntity() {
 

@@ -9,6 +9,7 @@ import java.util.UUID
 import org.apache.catalina.core.ApplicationPart
 import org.codefreak.codefreak.auth.Authority
 import org.codefreak.codefreak.auth.Authorization
+import org.codefreak.codefreak.auth.Role
 import org.codefreak.codefreak.entity.Answer
 import org.codefreak.codefreak.graphql.BaseDto
 import org.codefreak.codefreak.graphql.BaseResolver
@@ -35,6 +36,7 @@ class AnswerDto(@GraphQLIgnore val entity: Answer, ctx: ResolverContext) : BaseD
   val sourceUrl by lazy { FrontendUtil.getUriBuilder().path("/api/answers/$id/source").build().toUriString() }
   val createdAt = entity.createdAt
   val updatedAt = entity.updatedAt
+  val feedback by lazy { entity.feedback.map { FeedbackDto(it) } }
 
   val latestEvaluation by lazy {
     serviceAccess.getService(EvaluationService::class)
@@ -108,6 +110,15 @@ class AnswerMutation : BaseResolver(), Mutation {
     val answer = answerService.findAnswer(id)
     authorization.requireIsCurrentUser(answer.submission.user)
     answerService.resetAnswerFiles(answer)
+    true
+  }
+
+  @Transactional
+  fun addAnswerFeedback(answerId: UUID, path: String, summary: String, lineStart: Int): Boolean = context {
+    val answerService = serviceAccess.getService(AnswerService::class)
+    val answer = answerService.findAnswer(answerId)
+    authorization.requireAuthorityIfNotCurrentUser(answer.submission.user, Authority.ROLE_TEACHER)
+    answerService.addAnswerFeedback(answerId, path, summary, lineStart)
     true
   }
 }

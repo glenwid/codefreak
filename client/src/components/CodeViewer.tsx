@@ -6,9 +6,9 @@ import { FileType, useGetAnswerFileQuery } from '../generated/graphql'
 import { isBinaryContent, numberOfLines, sliceLines } from '../services/file'
 import AsyncPlaceholder from './AsyncContainer'
 import Centered from './Centered'
-import ReviewEditor from './code/ReviewEditor'
-import SyntaxHighlighter from './code/SyntaxHighlighter'
 import './CodeViewer.less'
+import { Language } from 'prism-react-renderer'
+import { CodeReview } from 'react-code-review-editor'
 
 interface CodeViewerProps {
   answerId: string
@@ -44,7 +44,7 @@ const CodeViewer: React.FC<CodeViewerProps> = ({
   }
 
   // use path from response or content and path can by out-of-sync
-  const { content, type, path, collectionDigest } = result.data.answerFile
+  const { content, type, path } = result.data.answerFile
 
   if (type !== FileType.File) {
     return codeViewerMessage(
@@ -76,26 +76,40 @@ const CodeViewer: React.FC<CodeViewerProps> = ({
     value = sliceLines(value, firstLineNumber, end)
   }
 
+  const getLanguage = (): Language => {
+    let language: Language
+    switch (extname(path)) {
+      case 'js':
+        language = 'javascript'
+        return language
+      case 'c':
+        language = 'c'
+        return language
+      case 'py':
+        language = 'python'
+        return language
+      default:
+        language = 'javascript'
+        return language
+    }
+  }
+
   if (review !== true) {
     return (
-      <SyntaxHighlighter
-        firstLineNumber={firstLineNumber}
-        highlightLines={highlightLines}
-        language={extname(path)}
-      >
-        {value}
-      </SyntaxHighlighter>
+      <CodeReview
+        code={value}
+        language={getLanguage()}
+        onCommentCreated={(value) => console.log(value)}
+      />
     )
   }
 
   return (
-    <ReviewEditor
-      answerId={answerId}
-      path={path}
-      fileCollectionDigest={collectionDigest}
-    >
-      {value}
-    </ReviewEditor>
+    <CodeReview
+      code={value}
+      language={getLanguage()}
+      onCommentCreated={(value) => console.log(value)}
+    />
   )
 }
 

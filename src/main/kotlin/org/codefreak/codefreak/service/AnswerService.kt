@@ -10,11 +10,7 @@ import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.codefreak.codefreak.auth.Authority
 import org.codefreak.codefreak.auth.hasAuthority
-import org.codefreak.codefreak.entity.Answer
-import org.codefreak.codefreak.entity.AssignmentStatus
-import org.codefreak.codefreak.entity.Submission
-import org.codefreak.codefreak.entity.Task
-import org.codefreak.codefreak.entity.User
+import org.codefreak.codefreak.entity.*
 import org.codefreak.codefreak.repository.AnswerRepository
 import org.codefreak.codefreak.service.file.FileService
 import org.codefreak.codefreak.util.FrontendUtil
@@ -124,12 +120,22 @@ class AnswerService : BaseService() {
   @Transactional
   fun createAnswer(submission: Submission, taskId: UUID): Answer {
     val task = taskService.findTask(taskId)
+    val feedback = mutableSetOf<Feedback>()
     if (!task.isTesting() && task.assignment?.status != AssignmentStatus.OPEN) {
       throw IllegalStateException("Assignment is not open. Cannot create answer.")
     }
-    val answer = answerRepository.save(Answer(submission, task))
+    val answer = answerRepository.save(Answer(submission, task, feedback ))
     copyFilesFromTask(answer)
     return answer
+  }
+
+  fun addAnswerFeedback(answerId: UUID, path: String, summary: String, lineStart: Int) {
+    val answer: Answer = findAnswer(answerId)
+    // TODO add author
+    val newFeedback = Feedback(summary)
+    newFeedback.severity = Feedback.Severity.INFO
+    newFeedback.fileContext = Feedback.FileContext(path, lineStart)
+    //answer.feedback = answer.feedback.plus(newFeedback)
   }
 
   private fun Task.isTesting() =
